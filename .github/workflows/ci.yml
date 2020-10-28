@@ -1,0 +1,57 @@
+name: CI
+on:
+  push:
+    branches:
+      - master
+      - github-ci
+    tags:
+      - v*
+jobs:
+  build_job:
+    name: Build on ${{ matrix.os }} ${{ matrix.cc }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-20.04
+            cc: gcc
+          - os: ubuntu-20.04
+            cc: clang
+    runs-on: ${{ matrix.os }}
+    env:
+      CC: ${{ matrix.cc }}
+      CHECK_KEYWORDS: unittest e2e
+      TRAVIS_SANDBOX: priviliged
+      TESTSUITEFLAGS: --color=never
+      ARTIFACTS_DIR: ~/artifacts
+    steps:
+    - name: Check out repository
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+    - name: Install dependencies
+      run: |
+        sudo apt-get update -q -y
+        sudo apt-get install autoconf automake autopoint libtool libpam0g-dev bison flex gettext
+        sudo apt-get install gcc clang
+    - name: Build
+      run: |
+        mkdir -p -- ${{ env.ARTIFACTS_DIR }}
+        printenv > ${{ env.ARTIFACTS_DIR }}/environ
+        ./autogen.sh
+        ./configure --enable-werror
+        cp -f ./config.log ${{ env.ARTIFACTS_DIR }}/
+        make
+    - name: Check
+      run: |
+        sudo -E make check
+        cp -f ./tests/testsuite.log ${{ env.ARTIFACTS_DIR }}/
+    - name: Distcheck
+      run: |
+        sudo -E make distcheck
+    - name: Upload Artifact
+      uses: actions/upload-artifact@v2
+      if: true
+      with:
+        name: artifacts-${{ matrix.cc }}
+        path: ${{ env.ARTIFACTS_DIR }}
+        retention-days: 5
